@@ -1,0 +1,571 @@
+openapi: 3.0.3
+info:
+  title: Social Network API
+  description: >
+    REST API для социальной сети ВКонтакте.
+  version: 1.0.0
+
+servers:
+  - url: https://api.social-network.example.com/v1
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Users
+    description: Анкеты пользователей
+  - name: Friends
+    description: Управление списком друзей
+  - name: Posts
+    description: Публикация и просмотр постов
+  - name: Media
+    description: Загрузка медиафайлов для постов
+  - name: Dialogs
+    description: Диалоги, чаты и сообщения
+
+paths:
+
+  /users/{userId}:
+    get:
+      tags: [Users]
+      summary: Получить анкету пользователя
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Анкета пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/{userId}/friends:
+    get:
+      tags: [Friends]
+      summary: Просмотреть список друзей пользователя
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Список друзей
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendListPage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /friends:
+    post:
+      tags: [Friends]
+      summary: Добавить пользователя в друзья
+      description: >
+        Дружба становится двусторонней сразу после запроса
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [friendId]
+              properties:
+                friendId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Пользователь добавлен в друзья
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Пользователи уже друзья
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /friends/{friendId}:
+    delete:
+      tags: [Friends]
+      summary: Удалить пользователя из друзей
+      parameters:
+        - name: friendId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Пользователь удалён из друзей
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /media/upload-url:
+    post:
+      tags: [Media]
+      summary: Получить presigned URL для загрузки медиафайла
+      description: >
+        Клиент запрашивает URL, затем сам заливает байты файла напрямую в
+        объектное хранилище, минуя сервер приложения. Возвращённый mediaId
+        сразу после этого имеет статус pending — готовым он станет только
+        после подтверждения от storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contentType]
+              properties:
+                contentType:
+                  type: string
+                  example: image/jpeg
+      responses:
+        '200':
+          description: Presigned URL для загрузки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mediaId:
+                    type: string
+                    format: uuid
+                  uploadUrl:
+                    type: string
+                    format: uri
+                  status:
+                    type: string
+                    enum: [pending]
+
+  /internal/media/{mediaId}/upload-complete:
+    post:
+      tags: [Media]
+      summary: "[internal] Webhook от storage о завершении загрузки"
+      description: >
+        Вызывается объектным хранилищем (не клиентом) после успешной записи
+        файла.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/MediaId'
+      responses:
+        '204':
+          description: Статус медиа обновлён на ready
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /posts:
+    post:
+      tags: [Posts]
+      summary: Опубликовать пост в ленту
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+                mediaIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Пост опубликован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '409':
+          description: >
+            Один или несколько mediaIds ещё в статусе pending (загрузка не
+            подтверждена storage). Клиенту стоит повторить запрос позже.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /posts/feed:
+    get:
+      tags: [Posts]
+      summary: Просмотреть домашнюю ленту (посты друзей)
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Домашняя лента постов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostListPage'
+
+  /users/{userId}/posts:
+    get:
+      tags: [Posts]
+      summary: Просмотреть посты конкретного пользователя
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Посты пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostListPage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dialogs:
+    get:
+      tags: [Dialogs]
+      summary: Просмотреть список диалогов и чатов текущего пользователя
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Список диалогов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DialogListPage'
+    post:
+      tags: [Dialogs]
+      summary: Создать диалог или получить уже существующий (find-or-create)
+      description: >
+        Единая точка входа для получения dialogId перед отправкой первого
+        сообщения — что для direct, что для group, что для уже
+        существующего диалога.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, participantIds]
+              properties:
+                type:
+                  type: string
+                  enum: [direct, group]
+                participantIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: >
+                    Для direct — ровно один id (второй участник — текущий
+                    пользователь из токена).
+                title:
+                  type: string
+                  description: Только для type=group
+      responses:
+        '201':
+          description: Диалог создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dialog'
+        '200':
+          description: Уже существующий direct-диалог с этим участником
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dialog'
+
+  /dialogs/{dialogId}/messages:
+    get:
+      tags: [Dialogs]
+      summary: Просмотреть сообщения диалога
+      parameters:
+        - $ref: '#/components/parameters/DialogId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Сообщения диалога
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageListPage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Dialogs]
+      summary: Отправить сообщение в диалог
+      parameters:
+        - $ref: '#/components/parameters/DialogId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, clientMessageId]
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+                mediaIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                clientMessageId:
+                  type: string
+                  format: uuid
+                  description: Для идемпотентности повторного запроса
+      responses:
+        '201':
+          description: Сообщение отправлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dialogs/{dialogId}/read:
+    post:
+      tags: [Dialogs]
+      summary: Отметить сообщения диалога прочитанными
+      parameters:
+        - $ref: '#/components/parameters/DialogId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lastReadMessageId]
+              properties:
+                lastReadMessageId:
+                  type: string
+                  format: uuid
+      responses:
+        '204':
+          description: Отмечено прочитанным
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DialogId:
+      name: dialogId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MediaId:
+      name: mediaId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Курсор пагинации (id последнего элемента предыдущей страницы)
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+
+  responses:
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+        bio:
+          type: string
+
+    FriendSummary:
+      type: object
+      description: >
+        Облегчённая версия User для списков друзей — без тяжёлых полей
+        вроде bio, которые не нужны на каждой странице списка.
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+
+    FriendListPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FriendSummary'
+        nextCursor:
+          type: string
+          nullable: true
+
+    Media:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+
+    Post:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+        text:
+          type: string
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/Media'
+        createdAt:
+          type: string
+          format: date-time
+
+    PostListPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Post'
+        nextCursor:
+          type: string
+          nullable: true
+
+    Dialog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [direct, group]
+        title:
+          type: string
+          nullable: true
+          description: Заполнено только для type=group
+        unreadCount:
+          type: integer
+        lastMessage:
+          $ref: '#/components/schemas/Message'
+
+    DialogListPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dialog'
+        nextCursor:
+          type: string
+          nullable: true
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        dialogId:
+          type: string
+          format: uuid
+        senderId:
+          type: string
+          format: uuid
+        text:
+          type: string
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/Media'
+        createdAt:
+          type: string
+          format: date-time
+
+    MessageListPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        nextCursor:
+          type: string
+          nullable: true
