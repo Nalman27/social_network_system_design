@@ -1,0 +1,95 @@
+==============Анкеты===============
+
+Table users {
+  id uuid [pk]
+  first_name text
+  last_name text
+  bio text
+  city text
+  interests text[]
+  avatar_media_id uuid [ref: > media.id]
+  created_at timestamp
+}
+
+==============Посты===============
+
+Table posts {
+  id uuid [pk]
+  author_id uuid [ref: > users.id]
+  text text
+  likes_count int
+  views_count int
+  created_at timestamp
+}
+
+Table hashtags {
+  id uuid [pk]
+  tag text [unique]
+}
+
+Table post_hashtags {
+  post_id uuid [ref: > posts.id]
+  hashtag_id uuid [ref: > hashtags.id]
+}
+
+Table comments {
+  id uuid [pk]
+  post_id uuid [ref: > posts.id]
+  author_id uuid [ref: > users.id]
+  text text
+  created_at timestamp
+}
+
+==============Сообщения и чаты===============
+
+Table dialogs {
+  id uuid [pk]
+  type text
+  title text
+  created_at timestamp
+}
+
+Table dialog_participants {
+  dialog_id uuid [ref: > dialogs.id]
+  user_id uuid [ref: > users.id]
+}
+
+Table messages {
+  id uuid [pk]
+  dialog_id uuid [ref: > dialogs.id]
+  sender_id uuid [ref: > users.id]
+  text text
+  created_at timestamp
+
+  Note: 'Wide-column БДшка, например Cassandra'
+}
+
+Table dialog_read_state {
+  dialog_id uuid [ref: > dialogs.id]
+  user_id uuid [ref: > users.id]
+  last_read_message_id uuid [ref: > messages.id]
+}
+
+==============Отношения===============
+
+Table relationships {
+  id uuid [pk]
+  user_a_id uuid [ref: > users.id]
+  user_b_id uuid [ref: > users.id]
+  type text
+  status text
+  created_at timestamp
+
+  Note: 'Графовая БД, например Neo4j'
+}
+
+==============Медиа===============
+
+Table media {
+  id uuid [pk]
+  owner_id uuid [ref: > users.id]
+  type text
+  url text
+  status text
+  created_at timestamp
+}
