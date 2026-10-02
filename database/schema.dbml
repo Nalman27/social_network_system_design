@@ -45,84 +45,88 @@
 ==============Анкеты===============
 
 Table users {
-  id uuid [pk]
-  first_name text
-  last_name text
-  bio text
-  city text
-  interests text[]
-  avatar_media_id uuid [ref: > media.id]
-  created_at timestamp
+  id              uuid        [pk]
+  first_name      text        [not null]
+  last_name       text        [not null]
+  bio             text
+  city            text
+  interests       text[]      [not null, default: '{}']
+  avatar_media_id uuid        [ref: > media.id]
+  created_at      timestamp   [not null, default: `now()`]
 }
 
 ==============Посты===============
 
 Table posts {
-  id uuid [pk]
-  author_id uuid [ref: > users.id]
-  text text
-  likes_count int
-  views_count int
-  created_at timestamp
+  id          uuid        [pk]
+  author_id   uuid        [not null, ref: > users.id]
+  text        text        [not null]
+  media_ids   uuid[]      [not null, default: '{}']
+  likes_count bigint      [not null, default: 0]
+  views_count bigint      [not null, default: 0]
+  created_at  timestamp   [not null, default: `now()`]
 }
 
 Table hashtags {
-  id uuid [pk]
-  tag text [unique]
+  id  uuid [pk]
+  tag text [not null, unique]
 }
 
 Table post_hashtags {
-  post_id uuid [ref: > posts.id]
-  hashtag_id uuid [ref: > hashtags.id]
+  post_id    uuid        [not null, ref: > posts.id]
+  hashtag_id uuid        [not null, ref: > hashtags.id]
+  created_at timestamp   [not null]
 }
 
 Table comments {
-  id uuid [pk]
-  post_id uuid [ref: > posts.id]
-  author_id uuid [ref: > users.id]
-  text text
-  created_at timestamp
+  id         uuid        [pk]
+  post_id    uuid        [not null, ref: > posts.id]
+  author_id  uuid        [not null, ref: > users.id]
+  text       text        [not null]
+  created_at timestamp   [not null, default: `now()`]
 }
 
 ==============Сообщения и чаты===============
 
 Table dialogs {
-  id uuid [pk]
-  type text
-  title text
-  created_at timestamp
+  id         uuid        [pk]
+  type       text        [not null]
+  title      text
+  created_at timestamp   [not null, default: `now()`]
 }
 
 Table dialog_participants {
-  dialog_id uuid [ref: > dialogs.id]
-  user_id uuid [ref: > users.id]
+  dialog_id uuid [not null, ref: > dialogs.id]
+  user_id   uuid [not null, ref: > users.id]
 }
 
 Table messages {
-  id uuid [pk]
-  dialog_id uuid [ref: > dialogs.id]
-  sender_id uuid [ref: > users.id]
-  text text
-  created_at timestamp
+  dialog_id   uuid      [ref: > dialogs.id]
+  time_bucket text
+  created_at  timestamp
+  id          uuid
+  sender_id   uuid      [ref: > users.id]
+  text        text
+  media_ids   uuid[]
 
   Note: 'Wide-column БДшка, например Cassandra'
 }
 
 Table dialog_read_state {
-  dialog_id uuid [ref: > dialogs.id]
-  user_id uuid [ref: > users.id]
-  last_read_message_id uuid [ref: > messages.id]
+  dialog_id            uuid [not null, ref: > dialogs.id]
+  user_id              uuid [not null, ref: > users.id]
+  last_read_message_id uuid [not null]
 }
 
 ==============Отношения===============
 
 Table relationships {
-  id uuid [pk]
-  user_a_id uuid [ref: > users.id]
-  user_b_id uuid [ref: > users.id]
-  type text
-  status text
-  created_at timestamp
+  id         uuid [pk]
+  user_a_id  uuid [ref: > users.id]
+  user_b_id  uuid [ref: > users.id]
+  type       text [not null]
+  status     text [not null]
+  created_at timestamp [not null, default: `now()`]
 
   Note: 'Графовая БД, например Neo4j'
 }
@@ -130,10 +134,10 @@ Table relationships {
 ==============Медиа===============
 
 Table media {
-  id uuid [pk]
-  owner_id uuid [ref: > users.id]
-  type text
-  url text
-  status text
-  created_at timestamp
+  id         uuid        [pk]
+  owner_id   uuid        [not null, ref: > users.id]
+  type       text        [not null]
+  url        text        [not null]
+  status     text        [not null, default: 'pending']
+  created_at timestamp   [not null, default: `now()`]
 }
